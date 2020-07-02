@@ -22,7 +22,7 @@ class Bolt:
     @staticmethod
     def activate(parsed_args, **kwargs):
         """Activates the Bolt CLI plugin if we are sending an S3 command."""
-        if parsed_args.command != 's3':
+        if not parsed_args.command.startswith('s3'):
             return
         session = kwargs['session']
 
