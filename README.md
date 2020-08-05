@@ -12,11 +12,11 @@ The minimum supported version of Python is version 3.
 
 ## Installation
 
-To install the plugin package, run: `pip3 install [-e] .` from this directory.
+To install the plugin package, run: `python installer.py` from this directory.
 
 ## Configuration
 
-To activate and configure the plugin, use `aws configure`:
+To configure the plugin after it has been installed, use `aws configure`:
 
 ```bash
 aws configure set plugins.bolt awscli-plugin-bolt
