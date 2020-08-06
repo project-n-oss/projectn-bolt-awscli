@@ -7,7 +7,7 @@ A simple installer for the awscli_bolt_plugin
 
 """
 
-# === Bootstrap the installer if it cannot find its dependancies === 
+# === Bootstrap the installer if it cannot find its dependency === 
 # Pexpect
 try:
     imp.find_module('pexpect')
@@ -58,7 +58,7 @@ def run_bash_cmd(command_str):
 @click.option('--account_id', prompt='Account ID', metavar="<account id>", help="Account to crunch with")
 @click.option('--install_server', prompt='Install Server', metavar="<install server>", help="Install server")
 def run(region, domain, account_id, install_server):
-  
+  print()
   cmds = [
     {
       'prompt':"Installing Plugin...",
