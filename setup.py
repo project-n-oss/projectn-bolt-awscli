@@ -13,4 +13,5 @@ setup(
     author='Project N',
     install_requires=requires,
     classifiers=[],
+    python_requires=python_requires
 )
