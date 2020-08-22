@@ -88,7 +88,7 @@ def run(region, domain, account_id, install_server):
 
   click.secho("Example:", fg="magenta")
   click.secho("Use AWS CLI to access bolt buckets", fg="magenta")
-  click.secho('aws --profile={region} s3 ls'.format(region), fg='magenta')
+  click.secho('aws --profile=<region> s3 ls', fg='magenta')
 
 if __name__ == '__main__':
   click.clear()
