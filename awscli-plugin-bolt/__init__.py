@@ -1,5 +1,7 @@
 from urllib.parse import urlsplit, urlunsplit
 
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
 from botocore.handlers import disable_signing
 from botocore.session import get_session
 
@@ -64,10 +66,18 @@ class Bolt:
         _, _, path, query, fragment = urlsplit(prepared_request.url)
         prepared_request.url = urlunsplit((Bolt.scheme, Bolt.host, path, query, fragment))
 
-        # Sets the X-Bolt-Identity-Request header on the outbound request.
-        # This will allow the Bolt service to proxy to AWS to resolve the caller's identity to check against ACLs.
-        prepared_request.headers['X-Bolt-Identity-Request'] = get_session().create_client('sts').generate_presigned_url(
-            'get_caller_identity', ExpiresIn=10)
+        request = AWSRequest(
+          method='POST',
+          url='https://sts.amazonaws.com/',
+          data='Action=GetCallerIdentity&Version=2011-06-15',
+          params=None,
+          headers=None
+        )
+        SigV4Auth(get_session().get_credentials().get_frozen_credentials(), "sts", 'us-east-1').add_auth(request)
+
+        for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token"]:
+          if request.headers.get(key):
+            prepared_request.headers[key] = request.headers[key]
 
 
 def awscli_initialize(cli):

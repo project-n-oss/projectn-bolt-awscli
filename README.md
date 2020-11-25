@@ -12,7 +12,7 @@ The minimum supported version of Python is version 3.
 
 ## Installation
 
-To install the plugin package, run: `python installer.py` from this directory.
+To install the plugin package, run: `pip3 install [-e] .` from this directory.
 
 ## Configuration
 
