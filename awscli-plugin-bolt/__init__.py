@@ -1,9 +1,14 @@
+from collections import defaultdict
+import json
+from random import choice
 from urllib.parse import urlsplit, urlunsplit
 
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
+from botocore.exceptions import UnknownEndpointError
 from botocore.handlers import disable_signing
 from botocore.session import get_session
+from urllib3 import PoolManager
 
 
 class Bolt:
@@ -18,8 +23,16 @@ class Bolt:
     active = False
     # The scheme (parsed at bootstrap from the AWS config).
     scheme = None
-    # The host (parsed at bootstrap from the AWS config).
-    host = None
+    # The service discovery host (parsed at bootstrap from the AWS config).
+    service_url = None
+    # Availability zone ID to use (may be none)
+    az_id = None
+    # Map of Bolt endpoints to use for connections
+    bolt_endpoints = defaultdict(list)
+    # const ordering to use when selecting endpoints
+    PREFERRED_READ_ENDPOINT_ORDER = ("main_read_endpoints", "main_write_endpoints", "failover_read_endpoints", "failover_write_endpoints")
+    PREFERRED_WRITE_ENDPOINT_ORDER = ("main_write_endpoints", "failover_write_endpoints")
+
 
     @staticmethod
     def activate(parsed_args, **kwargs):
@@ -37,8 +50,12 @@ class Bolt:
             return
 
         Bolt.active = True
-        Bolt.scheme, Bolt.host, _, _, _ = urlsplit(profile['bolt']['url'])
+        Bolt.scheme, Bolt.service_url, _, _, _ = urlsplit(profile['bolt']['url'])
+        if 'az' in profile['bolt']:
+            Bolt.az_id = profile['bolt']['az']
+        # TODO: support other methods of selecting AZ
 
+        Bolt.get_endpoints()
         # Disable request signing. We will instead send a presigned authenticating request as a request header to Bolt.
         session.register(
             'choose-signer', disable_signing, unique_id='bolt-disable-signing')
@@ -64,7 +81,9 @@ class Bolt:
         # Dispatches to the configured Bolt scheme and host.
         prepared_request = kwargs['request']
         _, _, path, query, fragment = urlsplit(prepared_request.url)
-        prepared_request.url = urlunsplit((Bolt.scheme, Bolt.host, path, query, fragment))
+        host = Bolt.select_endpoint(prepared_request.method)
+
+        prepared_request.url = urlunsplit((Bolt.scheme, host, path, query, fragment))
 
         request = AWSRequest(
           method='POST',
@@ -78,6 +97,28 @@ class Bolt:
         for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token"]:
           if request.headers.get(key):
             prepared_request.headers[key] = request.headers[key]
+
+    @staticmethod
+    def get_endpoints():
+        try:
+            service_url = f'{Bolt.service_url}/services/bolt?az={Bolt.az_id}'
+            resp = PoolManager(timeout=3.0).request('GET', service_url, retries=2)
+            endpoint_map = json.loads(resp.data.decode('utf-8'))
+            Bolt.bolt_endpoints = defaultdict(list, endpoint_map)
+        except Exception as e:
+            raise e
+
+    @staticmethod
+    def select_endpoint(method):
+        preferred_order = Bolt.PREFERRED_READ_ENDPOINT_ORDER if method in {"GET", "HEAD"} else Bolt.PREFERRED_WRITE_ENDPOINT_ORDER
+        for endpoints in preferred_order:
+            if Bolt.bolt_endpoints[endpoints]:
+                # use random choice for load balancing
+                return f"{choice(Bolt.bolt_endpoints[endpoints])}:9000"
+        # if we reach this point, no endpoints are available
+        # TODO: there's probably a more appropriate error
+        raise UnknownEndpointError(service_name='bolt', region_name=Bolt.az_id)
+
 
 
 def awscli_initialize(cli):
