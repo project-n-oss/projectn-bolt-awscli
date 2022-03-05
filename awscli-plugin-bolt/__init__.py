@@ -116,7 +116,6 @@ class Bolt:
                 # use random choice for load balancing
                 return f"{choice(Bolt.bolt_endpoints[endpoints])}:9000"
         # if we reach this point, no endpoints are available
-        # TODO: there's probably a more appropriate error
         raise UnknownEndpointError(service_name='bolt', region_name=Bolt.az_id)
 
 
