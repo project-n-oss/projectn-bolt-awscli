@@ -21,11 +21,13 @@ To configure the plugin after it has been installed, use `aws configure`:
 ```bash
 aws configure set plugins.bolt awscli-plugin-bolt
 aws [--profile PROFILE] configure set bolt.url <bolt URL>
+aws [--profile PROFILE] configure set bolt.az <preferred availability zone ID>
 ```
 
 For example, to activate a Bolt service using an internal load balancer hosted at `http://bolt.project.n` for the `staging` AWS profile, run:
 ```bash
-aws --profile staging configure set bolt.url http://bolt.project.n 
+aws --profile staging configure set bolt.url http://bolt.project.n
+aws --profile staging configure set bolt.az use1-az1
 ```
 
 ## AWS CLI v2
