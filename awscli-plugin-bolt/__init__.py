@@ -68,18 +68,26 @@ class Bolt:
         profile = session.get_scoped_config()
 
         # Activate the Bolt scheme only if a bolt.url config is provided.
-        if 'bolt' not in profile or 'url' not in profile['bolt']:
+        if 'bolt' not in profile:
+            return 
+        
+        if 'custom_domain' in profile['bolt']:
+            Bolt.scheme = 'https' 
+            Bolt.service_url = f"quicksilver.{profile['bolt']['custom_domain']}"
+            Bolt.hostname = f"bolt.{profile['bolt']['custom_domain']}"
+        elif 'hostname' in profile['bolt'] and 'url' in profile['bolt']:
+            Bolt.hostname = profile['bolt']['hostname']
+            Bolt.scheme, Bolt.service_url, _, _, _ = urlsplit(profile['bolt']['url'])
+        else:
+            # must define either a `custom_domain` or `hostname` + `url` to activate
             return
 
         Bolt.active = True
-        Bolt.scheme, Bolt.service_url, _, _, _ = urlsplit(profile['bolt']['url'])
+
+        # TODO: support other methods of selecting AZ
         if 'az' in profile['bolt']:
             Bolt.az_id = profile['bolt']['az']
-        # TODO: support other methods of selecting AZ
         
-        # TODO: could probably just have customers specify custom domain, and service url/bolt hostname can be inferred from that
-        if 'hostname' in profile['bolt']:
-            Bolt.hostname = profile['bolt']['hostname']
         
         Bolt.get_endpoints()
         # Disable request signing. We will instead send a presigned authenticating request as a request header to Bolt.
