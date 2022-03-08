@@ -8,9 +8,29 @@ from botocore.awsrequest import AWSRequest
 from botocore.exceptions import UnknownEndpointError
 from botocore.handlers import disable_signing
 from botocore.session import get_session
+from botocore.httpsession import URLLib3Session
 from urllib3 import PoolManager
 
 
+class BoltSession(URLLib3Session):
+    """
+    We need to override the default behavior of the URLLib3Session class to accept a different hostname for SSL verification,
+    since we want to connect to a specific IP without relying on DNS. See https://urllib3.readthedocs.io/en/latest/advanced-usage.html#custom-sni-hostname
+    """
+    def __init__(self, bolt_hostname, **kwargs):
+        self._bolt_hostname = bolt_hostname
+        super().__init__(**kwargs)
+
+
+    def _get_pool_manager_kwargs(self, **extra_kwargs):
+        # Add 'server_hostname' arg to use for SSL validation
+        return super()._get_pool_manager_kwargs(server_hostname=self._bolt_hostname, **extra_kwargs)
+
+
+    def send(self, request):
+        request.headers['Host'] = self._bolt_hostname
+        return super().send(request)
+            
 class Bolt:
     """A stateful request mutator for Bolt S3 proxy.
 
@@ -25,6 +45,8 @@ class Bolt:
     scheme = None
     # The service discovery host (parsed at bootstrap from the AWS config).
     service_url = None
+    # the hostname to use for SSL validation when connecting directly to Bolt IPs
+    hostname = None
     # Availability zone ID to use (may be none)
     az_id = None
     # Map of Bolt endpoints to use for connections
@@ -46,15 +68,27 @@ class Bolt:
         profile = session.get_scoped_config()
 
         # Activate the Bolt scheme only if a bolt.url config is provided.
-        if 'bolt' not in profile or 'url' not in profile['bolt']:
+        if 'bolt' not in profile:
+            return 
+        
+        if 'custom_domain' in profile['bolt']:
+            Bolt.scheme = 'https' 
+            Bolt.service_url = f"quicksilver.{profile['bolt']['custom_domain']}"
+            Bolt.hostname = f"bolt.{profile['bolt']['custom_domain']}"
+        elif 'hostname' in profile['bolt'] and 'url' in profile['bolt']:
+            Bolt.hostname = profile['bolt']['hostname']
+            Bolt.scheme, Bolt.service_url, _, _, _ = urlsplit(profile['bolt']['url'])
+        else:
+            # must define either a `custom_domain` or `hostname` + `url` to activate
             return
 
         Bolt.active = True
-        Bolt.scheme, Bolt.service_url, _, _, _ = urlsplit(profile['bolt']['url'])
+
+        # TODO: support other methods of selecting AZ
         if 'az' in profile['bolt']:
             Bolt.az_id = profile['bolt']['az']
-        # TODO: support other methods of selecting AZ
-
+        
+        
         Bolt.get_endpoints()
         # Disable request signing. We will instead send a presigned authenticating request as a request header to Bolt.
         session.register(
@@ -97,6 +131,11 @@ class Bolt:
         for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token"]:
           if request.headers.get(key):
             prepared_request.headers[key] = request.headers[key]
+        
+        # send this request with our custom session options
+        # if an AWSResponse is returned directly from a `before-send` event handler function, 
+        # botocore will use that as the response without making its own request.
+        return BoltSession(Bolt.hostname).send(prepared_request)
 
     @staticmethod
     def get_endpoints():
@@ -114,7 +153,7 @@ class Bolt:
         for endpoints in preferred_order:
             if Bolt.bolt_endpoints[endpoints]:
                 # use random choice for load balancing
-                return f"{choice(Bolt.bolt_endpoints[endpoints])}:9000"
+                return choice(Bolt.bolt_endpoints[endpoints])
         # if we reach this point, no endpoints are available
         raise UnknownEndpointError(service_name='bolt', region_name=Bolt.az_id)
 
