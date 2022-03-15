@@ -7,7 +7,7 @@ python_requires = '>=3'
 setup(
     name='awscli-plugin-bolt',
     packages=['awscli-plugin-bolt'],
-    version='2.0.1',
+    version='2.0.2',
     description='Bolt plugin for AWS CLI',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
