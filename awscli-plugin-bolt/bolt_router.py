@@ -6,6 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib3 import PoolManager
 from threading import Lock
 
+import random
 import sys 
 import sched
 import time
@@ -106,6 +107,11 @@ def roundTime(dt=None, dateDelta=datetime.timedelta(minutes=1)):
     return dt + datetime.timedelta(0,rounding-seconds,-dt.microsecond)
 
 class BoltSigV4Auth(SigV4Auth):
+    def __init__(self, *args, bolt_timestamp_pin_duration = datetime.timedelta(minutes=10), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__bolt_timestamp_pin_duration = bolt_timestamp_pin_duration
+        self.__bolt_random_offset = datetime.timedelta(seconds=random.randint(0, self.__bolt_timestamp_pin_duration.total_seconds()))
+
     # From https://github.com/boto/botocore/blob/e720eefba94963f373b3ff7c888a89bea06cd4a1/botocore/auth.py
     def add_auth(self, request):
         if self.credentials is None:
@@ -113,7 +119,8 @@ class BoltSigV4Auth(SigV4Auth):
         # datetime_now = datetime.datetime.utcnow()
 
         # Sign with a fixed time so that auth header can be cached
-        datetime_now = roundTime(datetime.datetime.utcnow(), datetime.timedelta(minutes=10))
+        # This fixed time is offset by a random interval to smooth out refreshes across clients
+        datetime_now = roundTime(datetime.datetime.utcnow() - self.__bolt_random_offset, self.__bolt_timestamp_pin_duration) + self.__bolt_random_offset
 
         request.context['timestamp'] = datetime_now.strftime(SIGV4_TIMESTAMP)
         # This could be a retry.  Make sure the previous
@@ -157,7 +164,6 @@ class BoltRouter:
         self._mutex = Lock()
 
         self._get_endpoints()
-
 
         self._auth = BoltSigV4Auth(get_session().get_credentials().get_frozen_credentials(), "sts", 'us-east-1')
 
