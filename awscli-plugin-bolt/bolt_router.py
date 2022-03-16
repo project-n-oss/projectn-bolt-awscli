@@ -6,14 +6,16 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib3 import PoolManager
 from threading import Lock
 
+import random
 import sys 
 import sched
 import time
+import datetime
 from functools import wraps
 from threading import Thread
 
 
-from botocore.auth import SigV4Auth
+from botocore.auth import SigV4Auth, SIGV4_TIMESTAMP, logger
 from botocore.awsrequest import AWSRequest
 from botocore.exceptions import UnknownEndpointError
 from botocore.session import get_session
@@ -89,7 +91,52 @@ class BoltSession(URLLib3Session):
     def send(self, request):
         request.headers['Host'] = self._bolt_hostname
         return super().send(request)
-            
+
+
+def roundTime(dt=None, dateDelta=datetime.timedelta(minutes=1)):
+    """Round a datetime object to a multiple of a timedelta
+    dt : datetime.datetime object, default now.
+    dateDelta : timedelta object, we round to a multiple of this, default 1 minute.
+    """
+    roundTo = dateDelta.total_seconds()
+
+    if dt == None : dt = datetime.datetime.now()
+    seconds = (dt - dt.min).seconds
+    # // is a floor division, not a comment on following line:
+    rounding = (seconds+roundTo/2) // roundTo * roundTo
+    return dt + datetime.timedelta(0,rounding-seconds,-dt.microsecond)
+
+class BoltSigV4Auth(SigV4Auth):
+    def __init__(self, *args, bolt_timestamp_pin_duration = datetime.timedelta(minutes=10), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__bolt_timestamp_pin_duration = bolt_timestamp_pin_duration
+        self.__bolt_random_offset = datetime.timedelta(seconds=random.randint(0, self.__bolt_timestamp_pin_duration.total_seconds()))
+
+    # From https://github.com/boto/botocore/blob/e720eefba94963f373b3ff7c888a89bea06cd4a1/botocore/auth.py
+    def add_auth(self, request):
+        if self.credentials is None:
+            raise NoCredentialsError()
+        # datetime_now = datetime.datetime.utcnow()
+
+        # Sign with a fixed time so that auth header can be cached
+        # This fixed time is offset by a random interval to smooth out refreshes across clients
+        datetime_now = roundTime(datetime.datetime.utcnow() - self.__bolt_random_offset, self.__bolt_timestamp_pin_duration) + self.__bolt_random_offset
+
+        request.context['timestamp'] = datetime_now.strftime(SIGV4_TIMESTAMP)
+        # This could be a retry.  Make sure the previous
+        # authorization header is removed first.
+        self._modify_request_before_signing(request)
+        canonical_request = self.canonical_request(request)
+        logger.debug("Calculating signature using v4 auth.")
+        logger.debug('CanonicalRequest:\n%s', canonical_request)
+        string_to_sign = self.string_to_sign(request, canonical_request)
+        logger.debug('StringToSign:\n%s', string_to_sign)
+        signature = self.signature(string_to_sign, request)
+        logger.debug('Signature:\n%s', signature)
+
+        self._inject_signature_to_request(request, signature)
+
+
 class BoltRouter:
     """A stateful request mutator for Bolt S3 proxy.
 
@@ -118,6 +165,8 @@ class BoltRouter:
 
         self._get_endpoints()
 
+        self._auth = BoltSigV4Auth(get_session().get_credentials().get_frozen_credentials(), "sts", 'us-east-1')
+
         if update_interval > 0:
             @async_function
             @schedule(update_interval)
@@ -143,7 +192,7 @@ class BoltRouter:
           params=None,
           headers=None
         )
-        SigV4Auth(get_session().get_credentials().get_frozen_credentials(), "sts", 'us-east-1').add_auth(request)
+        self._auth.add_auth(request)
 
         for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token"]:
           if request.headers.get(key):
