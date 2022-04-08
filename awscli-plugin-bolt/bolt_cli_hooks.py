@@ -55,7 +55,7 @@ def _activate(parsed_args, **kwargs):
             pass
 
     global _global_bolt_router
-    _global_bolt_router = BoltRouter(scheme, service_url, hostname, az_id)
+    _global_bolt_router = BoltRouter(scheme, service_url, hostname, region, az_id)
 
     # Disable request signing. We will instead send a presigned authenticating request as a request header to Bolt.
     session.register(

@@ -149,7 +149,7 @@ class BoltRouter:
     PREFERRED_READ_ENDPOINT_ORDER = ("main_read_endpoints", "main_write_endpoints", "failover_read_endpoints", "failover_write_endpoints")
     PREFERRED_WRITE_ENDPOINT_ORDER = ("main_write_endpoints", "failover_write_endpoints")
 
-    def __init__(self, scheme, service_url, hostname, az_id, update_interval=-1):
+    def __init__(self, scheme, service_url, hostname, region, az_id, update_interval=-1):
         # The scheme (parsed at bootstrap from the AWS config).
         self._scheme = scheme
         # The service discovery host (parsed at bootstrap from the AWS config).
@@ -158,6 +158,7 @@ class BoltRouter:
         self._hostname = hostname
         # Availability zone ID to use (may be none)
         self._az_id = az_id
+        self._region = region
 
         # Map of Bolt endpoints to use for connections, and mutex protecting it
         self._bolt_endpoints = defaultdict(list)
@@ -165,7 +166,9 @@ class BoltRouter:
 
         self._get_endpoints()
 
-        self._auth = BoltSigV4Auth(get_session().get_credentials().get_frozen_credentials(), "sts", 'us-east-1')
+        self._auth = BoltSigV4Auth(get_session().get_credentials().get_frozen_credentials(), "s3", region)
+        # Each client uses a random 4-char long prefix to randomize the S3 path used for auth lookups
+        self._prefix = ''.join(random.choice(string.ascii_uppercase  + string.ascii_lowercase + string.digits) for _ in range(4))
 
         if update_interval > 0:
             @async_function
@@ -185,21 +188,30 @@ class BoltRouter:
 
         prepared_request.url = urlunsplit((self._scheme, host, path, query, fragment))
 
+        # TODO Fix handling requests without bucket names (like list)
+        source_bucket = path.split('/')[1]
+
+        # Construct the HEAD request that would be sent out by Bolt for authentication
         request = AWSRequest(
-          method='POST',
-          url='https://sts.amazonaws.com/',
-          data='Action=GetCallerIdentity&Version=2011-06-15',
-          params=None,
-          headers=None
+            method='HEAD',
+            url='https://s3.{}.amazonaws.com/{}/{}/auth'.format(self._region,source_bucket, self._prefix),
+            data=None,
+            params=None,
+            headers=None
         )
+        # S3 requests always need the Content-SHA header included in the signature. As the HEAD request has no
+        # content, it's just the SHA of an empty string and it's always the value below.
+        # https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+        request.headers['X-Amz-Content-Sha256'] = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
         self._auth.add_auth(request)
 
-        for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token"]:
-          if request.headers.get(key):
-            prepared_request.headers[key] = request.headers[key]
-        
+        for key in ["X-Amz-Date", "Authorization", "X-Amz-Security-Token", "X-Amz-Content-Sha256"]:
+            if request.headers.get(key):
+                prepared_request.headers[key] = request.headers[key]
+        prepared_request.headers['X-Bolt-Auth-Prefix'] = self._prefix
+
         # send this request with our custom session options
-        # if an AWSResponse is returned directly from a `before-send` event handler function, 
+        # if an AWSResponse is returned directly from a `before-send` event handler function,
         # botocore will use that as the response without making its own request.
         return BoltSession(self._hostname).send(prepared_request)
 
