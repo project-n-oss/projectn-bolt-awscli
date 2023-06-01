@@ -5,10 +5,10 @@ requires = ['awscli>=1.12.13', 'botocore>=1.12.13']
 python_requires = '>=3'
 
 setup(
-    name='awscli-plugin-bolt',
-    packages=['awscli-plugin-bolt'],
-    version='2.0.4',
-    description='Bolt plugin for AWS CLI',
+    name='awscli-plugin-granica',
+    packages=['awscli-plugin-granica'],
+    version='2.0.5',
+    description='Granica plugin for AWS CLI',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     author='Project N',
