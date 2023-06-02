@@ -7,7 +7,7 @@ python_requires = '>=3'
 setup(
     name='awscli-plugin-granica',
     packages=['awscli-plugin-granica'],
-    version='2.0.5',
+    version='2.0.6',
     description='Granica plugin for AWS CLI',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
