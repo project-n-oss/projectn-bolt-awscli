@@ -3,7 +3,7 @@ import imp
 
 """
 
-A simple installer for the awscli_bolt_plugin
+A simple installer for the awscli-plugin-granica
 
 """
 
@@ -54,7 +54,7 @@ def run_bash_cmd(command_str):
 
 @click.command()
 @click.option('--region', prompt='Region', metavar="<region>", help="Region to deploy in")
-@click.option('--domain', prompt='Domain', metavar="<domain>", help="BOLT domain")
+@click.option('--domain', prompt='Domain', metavar="<domain>", help="Granica domain")
 @click.option('--account_id', prompt='Account ID', metavar="<account id>", help="Account to crunch with")
 @click.option('--install_server', prompt='Install Server', metavar="<install server>", help="Install server")
 def run(region, domain, account_id, install_server):
@@ -64,7 +64,7 @@ def run(region, domain, account_id, install_server):
       'prompt':"Installing Plugin...",
       'commands':[
         'pip3 install --user .',
-        'aws configure set plugins.bolt awscli-plugin-bolt'
+        'aws configure set plugins.granica awscli-plugin-granica'
       ]
     },
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
         splash.append(line.replace('\n',""))
   except:
     print('Warning: Missing splash text')
-    splash = ["======== BOLT CLI INSTALLER ========"]
+    splash = ["======== GRANICA CLI INSTALLER ========"]
   
   for line in splash:
     click.secho(line,fg='green')

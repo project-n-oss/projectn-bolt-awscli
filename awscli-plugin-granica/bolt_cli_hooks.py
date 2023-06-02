@@ -34,10 +34,10 @@ def _activate(parsed_args, **kwargs):
         except Exception as e:
             pass
 
-    if 'bolt_custom_domain' in profile and region is not None:
+    if 'granica_custom_domain' in profile and region is not None:
         scheme = 'https' 
-        service_url = f"quicksilver.{region}.{profile['bolt_custom_domain']}"
-        hostname = f"bolt.{region}.{profile['bolt_custom_domain']}"
+        service_url = f"quicksilver.{region}.{profile['granica_custom_domain']}"
+        hostname = f"bolt.{region}.{profile['granica_custom_domain']}"
     elif 'bolt_hostname' in profile and 'bolt_url' in profile:
         hostname = profile['bolt_hostname']
         scheme, service_url, _, _, _ = urlsplit(profile['bolt_url'])
@@ -46,8 +46,8 @@ def _activate(parsed_args, **kwargs):
         return
 
     az_id = None
-    if 'bolt_az' in profile:
-        az_id = profile['bolt_az']
+    if 'granica_az' in profile:
+        az_id = profile['granica_az']
     else:
         try:
             az_id = get_availability_zone_id()
