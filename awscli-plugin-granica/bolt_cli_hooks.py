@@ -24,8 +24,8 @@ def _activate(parsed_args, **kwargs):
     profile = session.get_scoped_config()
     
     region = None
-    if 'bolt_region' in profile:
-        region = profile['bolt_region']
+    if 'granica_region' in profile:
+        region = profile['granica_region']
     elif 'region' in profile:
         region = profile['region']
     else:

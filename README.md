@@ -21,14 +21,13 @@ To configure the plugin after it has been installed, use `aws configure`:
 ```bash
 aws configure set plugins.granica awscli-plugin-granica
 aws [--profile PROFILE] configure set granica_custom_domain <Granica custom domain>
-aws [--profile PROFILE] configure set granica_az <preferred availability zone ID>
+aws [--profile PROFILE] configure set region <Region>
 ```
-`granica_custom_domain`
 
 For example, to activate a Granica service using an internal load balancer hosted at `https://quicksilver.us-east-1.mydomain.mycompany.com` for the `staging` AWS profile, run:
 ```bash
 aws --profile staging configure set granica_custom_domain mydomain.mycompany.com
-aws --profile staging configure set granica_az use1-az1
+aws --profile staging configure set region us-east-1
 ```
 
 ## AWS CLI v2
