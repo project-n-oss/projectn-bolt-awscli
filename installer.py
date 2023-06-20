@@ -103,6 +103,6 @@ if __name__ == '__main__':
   
   for line in splash:
     click.secho(line,fg='green')
-  click.secho("\nFor technical support email: support@projectn.co\n",fg='white')
+  click.secho("\nFor technical support email: support@granica.ai\n",fg='white')
 
   run()
